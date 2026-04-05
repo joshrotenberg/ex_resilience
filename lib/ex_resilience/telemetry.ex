@@ -60,6 +60,20 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{system_time: integer}`.
       Metadata: `%{name: atom, retry_after_ms: non_neg_integer}`.
 
+  ## Chaos Events
+
+    * `[:ex_resilience, :chaos, :error_injected]` - emitted when an error is injected.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :chaos, :latency_injected]` - emitted when latency is injected.
+      Measurements: `%{delay_ms: non_neg_integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :chaos, :passthrough]` - emitted when no fault is injected.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -97,6 +111,10 @@ defmodule ExResilience.Telemetry do
       # Rate limiter
       [:ex_resilience, :rate_limiter, :allowed],
       [:ex_resilience, :rate_limiter, :rejected],
+      # Chaos
+      [:ex_resilience, :chaos, :error_injected],
+      [:ex_resilience, :chaos, :latency_injected],
+      [:ex_resilience, :chaos, :passthrough],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]

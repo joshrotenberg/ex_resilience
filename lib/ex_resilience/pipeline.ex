@@ -23,7 +23,7 @@ defmodule ExResilience.Pipeline do
 
   """
 
-  alias ExResilience.{Bulkhead, CircuitBreaker, RateLimiter, Retry, Telemetry}
+  alias ExResilience.{Bulkhead, Chaos, CircuitBreaker, RateLimiter, Retry, Telemetry}
 
   @type layer :: {atom(), keyword()}
 
@@ -57,11 +57,12 @@ defmodule ExResilience.Pipeline do
     * `:circuit_breaker` -- see `ExResilience.CircuitBreaker` for options.
     * `:retry` -- see `ExResilience.Retry` for options.
     * `:rate_limiter` -- see `ExResilience.RateLimiter` for options.
+    * `:chaos` -- see `ExResilience.Chaos` for options.
 
   """
   @spec add(t(), atom(), keyword()) :: t()
   def add(%__MODULE__{} = pipeline, layer, opts \\ [])
-      when layer in [:bulkhead, :circuit_breaker, :retry, :rate_limiter] do
+      when layer in [:bulkhead, :circuit_breaker, :retry, :rate_limiter, :chaos] do
     %{pipeline | layers: pipeline.layers ++ [{layer, opts}]}
   end
 
@@ -151,6 +152,10 @@ defmodule ExResilience.Pipeline do
 
   defp wrap_layer(:retry, opts, inner, _pipeline_name) do
     fn -> Retry.call(inner, opts) end
+  end
+
+  defp wrap_layer(:chaos, opts, inner, _pipeline_name) do
+    fn -> Chaos.call(inner, opts) end
   end
 
   defp classify({:ok, _}), do: :ok
