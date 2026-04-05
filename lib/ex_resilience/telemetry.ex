@@ -60,6 +60,20 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{system_time: integer}`.
       Metadata: `%{name: atom, retry_after_ms: non_neg_integer}`.
 
+  ## Coalesce Events
+
+    * `[:ex_resilience, :coalesce, :execute]` - emitted when a new execution starts for a key.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :coalesce, :join]` - emitted when a caller joins an in-flight request.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :coalesce, :complete]` - emitted when an execution completes and broadcasts.
+      Measurements: `%{waiters: non_neg_integer}`.
+      Metadata: `%{name: atom, key: term, result: :ok | :error}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -97,6 +111,10 @@ defmodule ExResilience.Telemetry do
       # Rate limiter
       [:ex_resilience, :rate_limiter, :allowed],
       [:ex_resilience, :rate_limiter, :rejected],
+      # Coalesce
+      [:ex_resilience, :coalesce, :execute],
+      [:ex_resilience, :coalesce, :join],
+      [:ex_resilience, :coalesce, :complete],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]
