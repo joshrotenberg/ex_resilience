@@ -23,7 +23,7 @@ defmodule ExResilience.Pipeline do
 
   """
 
-  alias ExResilience.{Bulkhead, CircuitBreaker, RateLimiter, Retry, Telemetry}
+  alias ExResilience.{Bulkhead, Cache, CircuitBreaker, RateLimiter, Retry, Telemetry}
 
   @type layer :: {atom(), keyword()}
 
@@ -57,11 +57,13 @@ defmodule ExResilience.Pipeline do
     * `:circuit_breaker` -- see `ExResilience.CircuitBreaker` for options.
     * `:retry` -- see `ExResilience.Retry` for options.
     * `:rate_limiter` -- see `ExResilience.RateLimiter` for options.
+    * `:cache` -- see `ExResilience.Cache` for options. Requires a `:key`
+      option (a static term or a zero-arity function returning the key).
 
   """
   @spec add(t(), atom(), keyword()) :: t()
   def add(%__MODULE__{} = pipeline, layer, opts \\ [])
-      when layer in [:bulkhead, :circuit_breaker, :retry, :rate_limiter] do
+      when layer in [:bulkhead, :circuit_breaker, :retry, :rate_limiter, :cache] do
     %{pipeline | layers: pipeline.layers ++ [{layer, opts}]}
   end
 
@@ -75,7 +77,7 @@ defmodule ExResilience.Pipeline do
   def start(%__MODULE__{} = pipeline) do
     pids =
       pipeline.layers
-      |> Enum.filter(fn {layer, _} -> layer in [:bulkhead, :circuit_breaker, :rate_limiter] end)
+      |> Enum.filter(fn {layer, _} -> layer in [:bulkhead, :circuit_breaker, :rate_limiter, :cache] end)
       |> Enum.map(fn {layer, opts} ->
         opts = Keyword.put_new(opts, :name, child_name(pipeline.name, layer))
         {:ok, pid} = start_layer(layer, opts)
@@ -133,6 +135,7 @@ defmodule ExResilience.Pipeline do
   defp start_layer(:bulkhead, opts), do: Bulkhead.start_link(opts)
   defp start_layer(:circuit_breaker, opts), do: CircuitBreaker.start_link(opts)
   defp start_layer(:rate_limiter, opts), do: RateLimiter.start_link(opts)
+  defp start_layer(:cache, opts), do: Cache.start_link(opts)
 
   defp wrap_layer(:bulkhead, opts, inner, pipeline_name) do
     name = Keyword.get(opts, :name, child_name(pipeline_name, :bulkhead))
@@ -151,6 +154,22 @@ defmodule ExResilience.Pipeline do
 
   defp wrap_layer(:retry, opts, inner, _pipeline_name) do
     fn -> Retry.call(inner, opts) end
+  end
+
+  defp wrap_layer(:cache, opts, inner, pipeline_name) do
+    name = Keyword.get(opts, :name, child_name(pipeline_name, :cache))
+    key_opt = Keyword.fetch!(opts, :key)
+
+    fn ->
+      key =
+        if is_function(key_opt, 0) do
+          key_opt.()
+        else
+          key_opt
+        end
+
+      Cache.call(name, key, inner)
+    end
   end
 
   defp classify({:ok, _}), do: :ok

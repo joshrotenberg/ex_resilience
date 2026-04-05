@@ -60,6 +60,24 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{system_time: integer}`.
       Metadata: `%{name: atom, retry_after_ms: non_neg_integer}`.
 
+  ## Cache Events
+
+    * `[:ex_resilience, :cache, :hit]` - emitted on cache hit.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :cache, :miss]` - emitted on cache miss.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :cache, :put]` - emitted when a value is stored.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :cache, :invalidate]` - emitted when an entry is invalidated.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -97,6 +115,11 @@ defmodule ExResilience.Telemetry do
       # Rate limiter
       [:ex_resilience, :rate_limiter, :allowed],
       [:ex_resilience, :rate_limiter, :rejected],
+      # Cache
+      [:ex_resilience, :cache, :hit],
+      [:ex_resilience, :cache, :miss],
+      [:ex_resilience, :cache, :put],
+      [:ex_resilience, :cache, :invalidate],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]
