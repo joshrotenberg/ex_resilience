@@ -60,6 +60,20 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{system_time: integer}`.
       Metadata: `%{name: atom, retry_after_ms: non_neg_integer}`.
 
+  ## Hedge Events
+
+    * `[:ex_resilience, :hedge, :primary_won]` - emitted when the primary request returns first.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :hedge, :hedge_won]` - emitted when a hedge request returns first.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, hedge_index: pos_integer}`.
+
+    * `[:ex_resilience, :hedge, :fired]` - emitted when hedge requests are launched.
+      Measurements: `%{count: pos_integer}`.
+      Metadata: `%{name: atom}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -97,6 +111,10 @@ defmodule ExResilience.Telemetry do
       # Rate limiter
       [:ex_resilience, :rate_limiter, :allowed],
       [:ex_resilience, :rate_limiter, :rejected],
+      # Hedge
+      [:ex_resilience, :hedge, :primary_won],
+      [:ex_resilience, :hedge, :hedge_won],
+      [:ex_resilience, :hedge, :fired],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]
