@@ -60,6 +60,20 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{system_time: integer}`.
       Metadata: `%{name: atom, retry_after_ms: non_neg_integer}`.
 
+  ## Fallback Events
+
+    * `[:ex_resilience, :fallback, :applied]` - emitted when the fallback function is called.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :fallback, :passthrough]` - emitted when the original result passes through.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :fallback, :skipped]` - emitted when an error does not match the `:only` predicate.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -97,6 +111,10 @@ defmodule ExResilience.Telemetry do
       # Rate limiter
       [:ex_resilience, :rate_limiter, :allowed],
       [:ex_resilience, :rate_limiter, :rejected],
+      # Fallback
+      [:ex_resilience, :fallback, :applied],
+      [:ex_resilience, :fallback, :passthrough],
+      [:ex_resilience, :fallback, :skipped],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]
