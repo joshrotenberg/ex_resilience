@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/joshrotenberg/ex_resilience/compare/v0.3.0...v0.4.0) (2026-04-06)
+
+
+### Features
+
+* add success_threshold option and get_info/1 to circuit breaker ([#26](https://github.com/joshrotenberg/ex_resilience/issues/26)) ([befe988](https://github.com/joshrotenberg/ex_resilience/commit/befe988c829a4bd77f20823d43276f7372543f7e))
+* support proportional jitter fraction in retry ([#27](https://github.com/joshrotenberg/ex_resilience/issues/27)) ([9022518](https://github.com/joshrotenberg/ex_resilience/commit/9022518dcd04eefb858567530a022fe1f0d7a6c4))
+
 ## [0.3.0](https://github.com/joshrotenberg/ex_resilience/compare/v0.2.0...v0.3.0) (2026-04-06)
 
 
