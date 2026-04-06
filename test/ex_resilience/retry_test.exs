@@ -17,7 +17,9 @@ defmodule ExResilience.RetryTest do
             :counters.add(counter, 1, 1)
             {:error, :fail}
           end,
-          max_attempts: 3, base_delay: 1, jitter: false
+          max_attempts: 3,
+          base_delay: 1,
+          jitter: false
         )
 
       assert result == {:error, :fail}
@@ -39,7 +41,9 @@ defmodule ExResilience.RetryTest do
               {:ok, :done}
             end
           end,
-          max_attempts: 5, base_delay: 1, jitter: false
+          max_attempts: 5,
+          base_delay: 1,
+          jitter: false
         )
 
       assert result == {:ok, :done}
@@ -107,7 +111,10 @@ defmodule ExResilience.RetryTest do
 
       Retry.call(
         fn -> {:error, :fail} end,
-        max_attempts: 3, backoff: :fixed, base_delay: 20, jitter: false
+        max_attempts: 3,
+        backoff: :fixed,
+        base_delay: 20,
+        jitter: false
       )
 
       elapsed = System.monotonic_time(:millisecond) - start

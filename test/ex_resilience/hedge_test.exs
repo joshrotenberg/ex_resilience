@@ -94,10 +94,10 @@ defmodule ExResilience.HedgeTest do
       )
 
       assert_receive {:telemetry, [:ex_resilience, :hedge, :fired], %{count: 1},
-                       %{name: :test_hedge2}}
+                      %{name: :test_hedge2}}
 
       assert_receive {:telemetry, [:ex_resilience, :hedge, :hedge_won], _,
-                       %{name: :test_hedge2, hedge_index: 1}}
+                      %{name: :test_hedge2, hedge_index: 1}}
 
       :telemetry.detach("hedge-won-#{id}")
       :telemetry.detach("hedge-fired-#{id}")

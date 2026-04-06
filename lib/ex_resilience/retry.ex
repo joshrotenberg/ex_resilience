@@ -67,7 +67,9 @@ defmodule ExResilience.Retry do
   defp do_retry(fun, config, attempt) do
     delay_ms =
       if attempt > 1 do
-        raw = Backoff.delay_capped(config.backoff, config.base_delay, attempt - 1, config.max_delay)
+        raw =
+          Backoff.delay_capped(config.backoff, config.base_delay, attempt - 1, config.max_delay)
+
         if config.jitter, do: jitter_delay(raw), else: raw
       else
         0

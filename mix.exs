@@ -1,16 +1,23 @@
 defmodule ExResilience.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @source_url "https://github.com/joshrotenberg/ex_resilience"
+
   def project do
     [
       app: :ex_resilience,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: "Composable resilience middleware for Elixir",
       package: package(),
-      docs: docs()
+      docs: docs(),
+      dialyzer: [
+        plt_add_apps: [:ex_unit],
+        plt_file: {:no_warn, "_build/dev/dialyxir_#{System.otp_release()}.plt"}
+      ]
     ]
   end
 
@@ -32,14 +39,40 @@ defmodule ExResilience.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/joshrotenberg/ex_resilience"}
+      links: %{"GitHub" => @source_url}
     ]
   end
 
   defp docs do
     [
       main: "ExResilience",
-      extras: ["CHANGELOG.md"]
+      source_ref: "v#{@version}",
+      source_url: @source_url,
+      extras: [],
+      groups_for_modules: [
+        "Core Patterns": [
+          ExResilience.Bulkhead,
+          ExResilience.CircuitBreaker,
+          ExResilience.Retry,
+          ExResilience.RateLimiter
+        ],
+        "Extended Patterns": [
+          ExResilience.Coalesce,
+          ExResilience.Hedge,
+          ExResilience.Chaos,
+          ExResilience.Fallback,
+          ExResilience.Cache
+        ],
+        Cache: [
+          ExResilience.Cache.Backend,
+          ExResilience.Cache.EtsBackend
+        ],
+        Infrastructure: [
+          ExResilience.Pipeline,
+          ExResilience.Backoff,
+          ExResilience.Telemetry
+        ]
+      ]
     ]
   end
 end

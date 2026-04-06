@@ -44,7 +44,13 @@ defmodule ExResilience.CircuitBreaker do
 
   defmodule State do
     @moduledoc false
-    @enforce_keys [:name, :failure_threshold, :reset_timeout, :half_open_max_calls, :error_classifier]
+    @enforce_keys [
+      :name,
+      :failure_threshold,
+      :reset_timeout,
+      :half_open_max_calls,
+      :error_classifier
+    ]
     defstruct [
       :name,
       :failure_threshold,

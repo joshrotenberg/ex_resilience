@@ -30,7 +30,6 @@ defmodule ExResilience.Cache.EtsBackend do
   end
 
   @impl true
-  @spec init(keyword()) :: {:ok, State.t()} | {:error, term()}
   def init(opts) do
     table_name = Keyword.fetch!(opts, :table_name)
     sweep_interval = Keyword.get(opts, :sweep_interval, @default_sweep_interval)
@@ -41,7 +40,6 @@ defmodule ExResilience.Cache.EtsBackend do
   end
 
   @impl true
-  @spec get(term(), State.t()) :: {:hit, term(), State.t()} | {:miss, State.t()}
   def get(key, %State{table: table} = state) do
     case :ets.lookup(table, key) do
       [{^key, value, nil}] ->
@@ -61,7 +59,6 @@ defmodule ExResilience.Cache.EtsBackend do
   end
 
   @impl true
-  @spec put(term(), term(), non_neg_integer() | nil, State.t()) :: {:ok, State.t()}
   def put(key, value, ttl_ms, %State{table: table} = state) do
     expiry =
       case ttl_ms do
@@ -74,7 +71,6 @@ defmodule ExResilience.Cache.EtsBackend do
   end
 
   @impl true
-  @spec invalidate(term() | nil, State.t()) :: {:ok, State.t()}
   def invalidate(nil, %State{table: table} = state) do
     :ets.delete_all_objects(table)
     {:ok, state}
@@ -86,7 +82,6 @@ defmodule ExResilience.Cache.EtsBackend do
   end
 
   @impl true
-  @spec stats(State.t()) :: map()
   def stats(%State{table: table}) do
     %{size: :ets.info(table, :size)}
   end
@@ -96,7 +91,7 @@ defmodule ExResilience.Cache.EtsBackend do
 
   Called by the owning GenServer on each sweep tick.
   """
-  @spec sweep(State.t()) :: State.t()
+  @spec sweep(map()) :: map()
   def sweep(%State{table: table} = state) do
     now = System.monotonic_time(:millisecond)
 

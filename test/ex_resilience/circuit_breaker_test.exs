@@ -126,11 +126,12 @@ defmodule ExResilience.CircuitBreakerTest do
         _ -> false
       end
 
-      {:ok, _} = CircuitBreaker.start_link(
-        name: name,
-        failure_threshold: 1,
-        error_classifier: classifier
-      )
+      {:ok, _} =
+        CircuitBreaker.start_link(
+          name: name,
+          failure_threshold: 1,
+          error_classifier: classifier
+        )
 
       # Non-retryable error should not trip breaker
       CircuitBreaker.call(name, fn -> {:error, :permanent} end)
