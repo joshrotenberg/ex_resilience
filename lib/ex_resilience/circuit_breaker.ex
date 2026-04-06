@@ -16,8 +16,11 @@ defmodule ExResilience.CircuitBreaker do
     * `:failure_threshold` -- consecutive failures before opening. Default `5`.
     * `:reset_timeout` -- ms to wait in `:open` before trying `:half_open`. Default `30_000`.
     * `:half_open_max_calls` -- concurrent calls allowed in `:half_open`. Default `1`.
-    * `:error_classifier` -- 1-arity function that returns `true` if the result
-      should count as a failure. Default: matches `{:error, _}` and `:error`.
+    * `:error_classifier` -- controls which results count as failures.
+      Accepts either a module implementing `ExResilience.ErrorClassifier`
+      (classifications `:retriable` and `:failure` count as failures) or a
+      1-arity function returning `true` for failures (backward compatible).
+      Default: matches `{:error, _}` and `:error`.
 
   ## Examples
 
@@ -36,7 +39,7 @@ defmodule ExResilience.CircuitBreaker do
           | {:failure_threshold, pos_integer()}
           | {:reset_timeout, pos_integer()}
           | {:half_open_max_calls, pos_integer()}
-          | {:error_classifier, (term() -> boolean())}
+          | {:error_classifier, module() | (term() -> boolean())}
 
   @type state_name :: :closed | :open | :half_open
 
@@ -68,7 +71,7 @@ defmodule ExResilience.CircuitBreaker do
             failure_threshold: pos_integer(),
             reset_timeout: pos_integer(),
             half_open_max_calls: pos_integer(),
-            error_classifier: (term() -> boolean()),
+            error_classifier: module() | (term() -> boolean()),
             reset_timer: reference() | nil,
             state: :closed | :open | :half_open,
             failure_count: non_neg_integer(),
@@ -212,8 +215,26 @@ defmodule ExResilience.CircuitBreaker do
 
   @impl true
   def handle_cast({:record_result, result}, state) do
-    is_failure = state.error_classifier.(result)
-    {:noreply, handle_result(state, is_failure)}
+    {is_failure, is_ignore} = classify_for_cb(state.error_classifier, result)
+
+    if is_ignore do
+      {:noreply, state}
+    else
+      {:noreply, handle_result(state, is_failure)}
+    end
+  end
+
+  defp classify_for_cb(classifier, result) when is_atom(classifier) do
+    case classifier.classify(result) do
+      :retriable -> {true, false}
+      :failure -> {true, false}
+      :ignore -> {false, true}
+      :ok -> {false, false}
+    end
+  end
+
+  defp classify_for_cb(classifier, result) when is_function(classifier, 1) do
+    {classifier.(result), false}
   end
 
   @impl true

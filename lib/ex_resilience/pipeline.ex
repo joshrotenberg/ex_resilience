@@ -153,6 +153,34 @@ defmodule ExResilience.Pipeline do
   end
 
   @doc """
+  Sets the error classifier for all layers in the pipeline that support it.
+
+  Layers that already have an `:error_classifier` option are not overwritten.
+  Only `:circuit_breaker`, `:retry`, and `:fallback` layers are affected.
+
+  ## Examples
+
+      pipeline = Pipeline.new(:my_pipe)
+      |> Pipeline.add(:circuit_breaker, failure_threshold: 3)
+      |> Pipeline.add(:retry, max_attempts: 2)
+      |> Pipeline.with_classifier(MyApp.Classifier)
+
+  """
+  @spec with_classifier(t(), module()) :: t()
+  def with_classifier(%__MODULE__{} = pipeline, classifier) when is_atom(classifier) do
+    layers =
+      Enum.map(pipeline.layers, fn {layer, opts} ->
+        if layer in [:circuit_breaker, :retry, :fallback] do
+          {layer, Keyword.put_new(opts, :error_classifier, classifier)}
+        else
+          {layer, opts}
+        end
+      end)
+
+    %{pipeline | layers: layers}
+  end
+
+  @doc """
   Returns the child process name for a layer in this pipeline.
   """
   @spec child_name(atom(), atom()) :: atom()
