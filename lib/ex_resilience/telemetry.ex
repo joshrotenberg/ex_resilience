@@ -74,6 +74,66 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{waiters: non_neg_integer}`.
       Metadata: `%{name: atom, key: term, result: :ok | :error}`.
 
+  ## Hedge Events
+
+    * `[:ex_resilience, :hedge, :fired]` - emitted when hedge requests are launched.
+      Measurements: `%{count: pos_integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :hedge, :primary_won]` - emitted when the primary request wins.
+      Measurements: `%{duration: native_time}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :hedge, :hedge_won]` - emitted when a hedge request wins.
+      Measurements: `%{duration: native_time}`.
+      Metadata: `%{name: atom, hedge_index: pos_integer}`.
+
+  ## Chaos Events
+
+    * `[:ex_resilience, :chaos, :error_injected]` - emitted when an error is injected.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :chaos, :latency_injected]` - emitted when latency is injected.
+      Measurements: `%{delay_ms: non_neg_integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :chaos, :passthrough]` - emitted when no fault is injected.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+  ## Fallback Events
+
+    * `[:ex_resilience, :fallback, :applied]` - emitted when fallback is used.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :fallback, :passthrough]` - emitted when original result passes through.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :fallback, :skipped]` - emitted when error doesn't match predicate.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+  ## Cache Events
+
+    * `[:ex_resilience, :cache, :hit]` - emitted on cache hit.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :cache, :miss]` - emitted on cache miss.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :cache, :put]` - emitted when a value is cached.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
+    * `[:ex_resilience, :cache, :invalidate]` - emitted when a cache entry is invalidated.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom, key: term}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -115,6 +175,23 @@ defmodule ExResilience.Telemetry do
       [:ex_resilience, :coalesce, :execute],
       [:ex_resilience, :coalesce, :join],
       [:ex_resilience, :coalesce, :complete],
+      # Hedge
+      [:ex_resilience, :hedge, :fired],
+      [:ex_resilience, :hedge, :primary_won],
+      [:ex_resilience, :hedge, :hedge_won],
+      # Chaos
+      [:ex_resilience, :chaos, :error_injected],
+      [:ex_resilience, :chaos, :latency_injected],
+      [:ex_resilience, :chaos, :passthrough],
+      # Fallback
+      [:ex_resilience, :fallback, :applied],
+      [:ex_resilience, :fallback, :passthrough],
+      [:ex_resilience, :fallback, :skipped],
+      # Cache
+      [:ex_resilience, :cache, :hit],
+      [:ex_resilience, :cache, :miss],
+      [:ex_resilience, :cache, :put],
+      [:ex_resilience, :cache, :invalidate],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]

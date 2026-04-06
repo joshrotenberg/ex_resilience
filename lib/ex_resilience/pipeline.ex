@@ -23,7 +23,7 @@ defmodule ExResilience.Pipeline do
 
   """
 
-  alias ExResilience.{Bulkhead, CircuitBreaker, Coalesce, RateLimiter, Retry, Telemetry}
+  alias ExResilience.{Bulkhead, Cache, Chaos, CircuitBreaker, Coalesce, Fallback, Hedge, RateLimiter, Retry, Telemetry}
 
   @type layer :: {atom(), keyword()}
 
@@ -60,11 +60,27 @@ defmodule ExResilience.Pipeline do
     * `:coalesce` -- see `ExResilience.Coalesce` for options.
       Requires a `:key` option, either a static term or a 0-arity
       function returning the key.
+    * `:hedge` -- see `ExResilience.Hedge` for options.
+    * `:chaos` -- see `ExResilience.Chaos` for options.
+    * `:fallback` -- see `ExResilience.Fallback` for options.
+    * `:cache` -- see `ExResilience.Cache` for options.
+      Requires a `:key` option, either a static term or a 0-arity
+      function returning the key.
 
   """
   @spec add(t(), atom(), keyword()) :: t()
   def add(%__MODULE__{} = pipeline, layer, opts \\ [])
-      when layer in [:bulkhead, :circuit_breaker, :retry, :rate_limiter, :coalesce] do
+      when layer in [
+             :bulkhead,
+             :circuit_breaker,
+             :retry,
+             :rate_limiter,
+             :coalesce,
+             :hedge,
+             :chaos,
+             :fallback,
+             :cache
+           ] do
     %{pipeline | layers: pipeline.layers ++ [{layer, opts}]}
   end
 
@@ -78,7 +94,7 @@ defmodule ExResilience.Pipeline do
   def start(%__MODULE__{} = pipeline) do
     pids =
       pipeline.layers
-      |> Enum.filter(fn {layer, _} -> layer in [:bulkhead, :circuit_breaker, :rate_limiter, :coalesce] end)
+      |> Enum.filter(fn {layer, _} -> layer in [:bulkhead, :circuit_breaker, :rate_limiter, :coalesce, :cache] end)
       |> Enum.map(fn {layer, opts} ->
         opts = Keyword.put_new(opts, :name, child_name(pipeline.name, layer))
         {:ok, pid} = start_layer(layer, opts)
@@ -137,6 +153,7 @@ defmodule ExResilience.Pipeline do
   defp start_layer(:circuit_breaker, opts), do: CircuitBreaker.start_link(opts)
   defp start_layer(:rate_limiter, opts), do: RateLimiter.start_link(opts)
   defp start_layer(:coalesce, opts), do: Coalesce.start_link(opts)
+  defp start_layer(:cache, opts), do: Cache.start_link(opts)
 
   defp wrap_layer(:bulkhead, opts, inner, pipeline_name) do
     name = Keyword.get(opts, :name, child_name(pipeline_name, :bulkhead))
@@ -164,6 +181,28 @@ defmodule ExResilience.Pipeline do
     fn ->
       resolved_key = if is_function(key, 0), do: key.(), else: key
       Coalesce.call(name, resolved_key, inner)
+    end
+  end
+
+  defp wrap_layer(:hedge, opts, inner, _pipeline_name) do
+    fn -> Hedge.call(inner, opts) end
+  end
+
+  defp wrap_layer(:chaos, opts, inner, _pipeline_name) do
+    fn -> Chaos.call(inner, opts) end
+  end
+
+  defp wrap_layer(:fallback, opts, inner, _pipeline_name) do
+    fn -> Fallback.call(inner, opts) end
+  end
+
+  defp wrap_layer(:cache, opts, inner, pipeline_name) do
+    name = Keyword.get(opts, :name, child_name(pipeline_name, :cache))
+    key = Keyword.fetch!(opts, :key)
+
+    fn ->
+      resolved_key = if is_function(key, 0), do: key.(), else: key
+      Cache.call(name, resolved_key, inner)
     end
   end
 
