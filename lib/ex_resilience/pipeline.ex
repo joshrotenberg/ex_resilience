@@ -24,6 +24,7 @@ defmodule ExResilience.Pipeline do
   """
 
   alias ExResilience.{
+    AdaptiveConcurrency,
     Bulkhead,
     Cache,
     Chaos,
@@ -77,11 +78,14 @@ defmodule ExResilience.Pipeline do
     * `:cache` -- see `ExResilience.Cache` for options.
       Requires a `:key` option, either a static term or a 0-arity
       function returning the key.
+    * `:adaptive_concurrency` -- see `ExResilience.AdaptiveConcurrency`
+      for options.
 
   """
   @spec add(t(), atom(), keyword()) :: t()
   def add(%__MODULE__{} = pipeline, layer, opts \\ [])
       when layer in [
+             :adaptive_concurrency,
              :bulkhead,
              :circuit_breaker,
              :retry,
@@ -106,7 +110,14 @@ defmodule ExResilience.Pipeline do
     pids =
       pipeline.layers
       |> Enum.filter(fn {layer, _} ->
-        layer in [:bulkhead, :circuit_breaker, :rate_limiter, :coalesce, :cache]
+        layer in [
+          :adaptive_concurrency,
+          :bulkhead,
+          :circuit_breaker,
+          :rate_limiter,
+          :coalesce,
+          :cache
+        ]
       end)
       |> Enum.map(fn {layer, opts} ->
         opts = Keyword.put_new(opts, :name, child_name(pipeline.name, layer))
@@ -162,11 +173,17 @@ defmodule ExResilience.Pipeline do
 
   # -- Internal --
 
+  defp start_layer(:adaptive_concurrency, opts), do: AdaptiveConcurrency.start_link(opts)
   defp start_layer(:bulkhead, opts), do: Bulkhead.start_link(opts)
   defp start_layer(:circuit_breaker, opts), do: CircuitBreaker.start_link(opts)
   defp start_layer(:rate_limiter, opts), do: RateLimiter.start_link(opts)
   defp start_layer(:coalesce, opts), do: Coalesce.start_link(opts)
   defp start_layer(:cache, opts), do: Cache.start_link(opts)
+
+  defp wrap_layer(:adaptive_concurrency, opts, inner, pipeline_name) do
+    name = Keyword.get(opts, :name, child_name(pipeline_name, :adaptive_concurrency))
+    fn -> AdaptiveConcurrency.call(name, inner) end
+  end
 
   defp wrap_layer(:bulkhead, opts, inner, pipeline_name) do
     name = Keyword.get(opts, :name, child_name(pipeline_name, :bulkhead))
