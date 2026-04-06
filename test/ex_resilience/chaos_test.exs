@@ -150,7 +150,7 @@ defmodule ExResilience.ChaosTest do
       Chaos.call(fn -> :ok end, error_rate: 0.0, latency_rate: 0.0, name: :test_chaos)
 
       assert_received {:telemetry, [:ex_resilience, :chaos, :passthrough], %{system_time: _},
-                        %{name: :test_chaos}}
+                       %{name: :test_chaos}}
 
       :telemetry.detach("chaos-passthrough-#{inspect(ref)}")
     end
@@ -171,7 +171,7 @@ defmodule ExResilience.ChaosTest do
       Chaos.call(fn -> :ok end, error_rate: 1.0, seed: 1, name: :test_chaos)
 
       assert_received {:telemetry, [:ex_resilience, :chaos, :error_injected], %{system_time: _},
-                        %{name: :test_chaos}}
+                       %{name: :test_chaos}}
 
       :telemetry.detach("chaos-error-#{inspect(ref)}")
     end
@@ -198,8 +198,8 @@ defmodule ExResilience.ChaosTest do
         name: :test_chaos
       )
 
-      assert_received {:telemetry, [:ex_resilience, :chaos, :latency_injected],
-                        %{delay_ms: 10}, %{name: :test_chaos}}
+      assert_received {:telemetry, [:ex_resilience, :chaos, :latency_injected], %{delay_ms: 10},
+                       %{name: :test_chaos}}
 
       :telemetry.detach("chaos-latency-#{inspect(ref)}")
     end

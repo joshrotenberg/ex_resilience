@@ -23,7 +23,18 @@ defmodule ExResilience.Pipeline do
 
   """
 
-  alias ExResilience.{Bulkhead, Cache, Chaos, CircuitBreaker, Coalesce, Fallback, Hedge, RateLimiter, Retry, Telemetry}
+  alias ExResilience.{
+    Bulkhead,
+    Cache,
+    Chaos,
+    CircuitBreaker,
+    Coalesce,
+    Fallback,
+    Hedge,
+    RateLimiter,
+    Retry,
+    Telemetry
+  }
 
   @type layer :: {atom(), keyword()}
 
@@ -94,7 +105,9 @@ defmodule ExResilience.Pipeline do
   def start(%__MODULE__{} = pipeline) do
     pids =
       pipeline.layers
-      |> Enum.filter(fn {layer, _} -> layer in [:bulkhead, :circuit_breaker, :rate_limiter, :coalesce, :cache] end)
+      |> Enum.filter(fn {layer, _} ->
+        layer in [:bulkhead, :circuit_breaker, :rate_limiter, :coalesce, :cache]
+      end)
       |> Enum.map(fn {layer, opts} ->
         opts = Keyword.put_new(opts, :name, child_name(pipeline.name, layer))
         {:ok, pid} = start_layer(layer, opts)

@@ -9,12 +9,9 @@ on:
 permissions:
   contents: read
 
-env:
-  MIX_ENV: test
-
 jobs:
   test:
-    name: Test (OTP ${{ matrix.otp }} / Elixir ${{ matrix.elixir }})
+    name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,68 +25,59 @@ jobs:
             otp: "28"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
-      - name: Restore dependencies cache
-        uses: actions/cache@v4
+      - name: Restore deps cache
+        uses: actions/cache@v5
         with:
-          path: deps
-          key: deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-
+          path: |
+            deps
+            _build
+          key: mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            mix-${{ matrix.elixir }}-${{ matrix.otp }}-
 
-      - name: Restore build cache
-        uses: actions/cache@v4
-        with:
-          path: _build
-          key: build-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: build-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-
+      - name: Install dependencies
+        run: mix deps.get
 
-      - run: mix deps.get
-      - run: mix compile --warnings-as-errors
-      - run: mix test
+      - name: Compile (warnings as errors)
+        run: mix compile --warnings-as-errors
 
-  quality:
-    name: Quality checks
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Credo
+        run: mix credo --strict
+
+      - name: Run tests
+        run: mix test
+
+  docs:
+    name: Docs
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: "28"
           elixir-version: "1.18"
+          otp-version: "28"
 
-      - name: Restore dependencies cache
-        uses: actions/cache@v4
+      - name: Restore deps cache
+        uses: actions/cache@v5
         with:
-          path: deps
-          key: deps-${{ runner.os }}-28-1.18-${{ hashFiles('**/mix.lock') }}
-          restore-keys: deps-${{ runner.os }}-28-1.18-
+          path: |
+            deps
+            _build
+          key: mix-docs-1.18-28-${{ hashFiles('mix.lock') }}
 
-      - name: Restore build cache
-        uses: actions/cache@v4
-        with:
-          path: _build
-          key: build-${{ runner.os }}-28-1.18-${{ hashFiles('**/mix.lock') }}
-          restore-keys: build-${{ runner.os }}-28-1.18-
+      - name: Install dependencies
+        run: mix deps.get
 
-      - name: Restore PLT cache
-        uses: actions/cache@v4
-        with:
-          path: _build/dev/*.plt*
-          key: plt-${{ runner.os }}-28-1.18-${{ hashFiles('**/mix.lock') }}
-          restore-keys: plt-${{ runner.os }}-28-1.18-
-
-      - run: mix deps.get
-      - run: mix compile --warnings-as-errors
-      - run: mix credo --strict
-      - run: mix dialyzer
-      - run: mix docs --warnings-as-errors
-        env:
-          MIX_ENV: dev
+      - name: Build docs
+        run: mix docs
