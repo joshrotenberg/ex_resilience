@@ -59,6 +59,7 @@ defmodule ExResilience.MixProject do
           ExResilience.RateLimiter
         ],
         "Extended Patterns": [
+          ExResilience.AdaptiveConcurrency,
           ExResilience.Coalesce,
           ExResilience.Hedge,
           ExResilience.Chaos,
@@ -69,8 +70,13 @@ defmodule ExResilience.MixProject do
           ExResilience.Cache.Backend,
           ExResilience.Cache.EtsBackend
         ],
+        "Error Classification": [
+          ExResilience.ErrorClassifier,
+          ExResilience.ErrorClassifier.Default
+        ],
         Infrastructure: [
           ExResilience.Pipeline,
+          ExResilience.Pipeline.Supervisor,
           ExResilience.Backoff,
           ExResilience.Telemetry
         ]
