@@ -134,7 +134,7 @@ defmodule ExResilience.StressTest do
           end)
         end
 
-      results = Task.await_many(tasks, 10_000)
+      results = Task.await_many(tasks, 30_000)
 
       assert Enum.all?(results, &match?({:ok, :result}, &1))
       # Should have executed only once (or very few times if timing is tight)

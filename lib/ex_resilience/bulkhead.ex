@@ -6,7 +6,7 @@ defmodule ExResilience.Bulkhead do
   the limit are queued and served in order. If the queue wait exceeds
   `max_wait`, the caller receives `{:error, :bulkhead_full}`.
 
-  Uses ETS for the permit counter on the hot path and the GenServer
+  Uses `:atomics` for the permit counter (lock-free CAS) and the GenServer
   for queue management.
 
   ## Options
@@ -37,14 +37,23 @@ defmodule ExResilience.Bulkhead do
 
   defmodule State do
     @moduledoc false
-    @enforce_keys [:name, :max_concurrent, :max_wait, :table]
-    defstruct [:name, :max_concurrent, :max_wait, :table, queue: :queue.new(), timers: %{}]
+    @enforce_keys [:name, :max_concurrent, :max_wait, :table, :counter]
+    defstruct [
+      :name,
+      :max_concurrent,
+      :max_wait,
+      :table,
+      :counter,
+      queue: :queue.new(),
+      timers: %{}
+    ]
 
     @type t :: %__MODULE__{
             name: atom(),
             max_concurrent: pos_integer(),
             max_wait: non_neg_integer(),
             table: :ets.tid(),
+            counter: :atomics.atomics_ref(),
             queue: :queue.queue({reference(), pid()}),
             timers: %{reference() => reference()}
           }
@@ -113,8 +122,8 @@ defmodule ExResilience.Bulkhead do
   """
   @spec active_count(atom()) :: non_neg_integer()
   def active_count(name) do
-    [{:active, count}] = :ets.lookup(table_name(name), :active)
-    count
+    [{:counter, counter}] = :ets.lookup(table_name(name), :counter)
+    max(:atomics.get(counter, 1), 0)
   end
 
   @doc """
@@ -134,7 +143,9 @@ defmodule ExResilience.Bulkhead do
     max_wait = Keyword.get(opts, :max_wait, 5_000)
 
     table = :ets.new(table_name(name), [:named_table, :public, :set])
-    :ets.insert(table, {:active, 0})
+    # Index 1 = active count
+    counter = :atomics.new(1, signed: true)
+    :ets.insert(table, {:counter, counter})
     :ets.insert(table, {:max, max_concurrent})
     :ets.insert(table, {:max_wait, max_wait})
 
@@ -142,7 +153,8 @@ defmodule ExResilience.Bulkhead do
       name: name,
       max_concurrent: max_concurrent,
       max_wait: max_wait,
-      table: table
+      table: table,
+      counter: counter
     }
 
     {:ok, state}
@@ -161,14 +173,14 @@ defmodule ExResilience.Bulkhead do
     {:noreply, %{state | queue: queue}}
   end
 
-  def handle_cast({:release, _table}, state) do
+  def handle_cast(:release, state) do
     case :queue.out(state.queue) do
       {{:value, {ref, pid}}, rest} ->
         send(pid, {:bulkhead_permit, ref})
         {:noreply, %{state | queue: rest}}
 
       {:empty, _} ->
-        :ets.update_counter(state.table, :active, {2, -1})
+        :atomics.sub(state.counter, 1, 1)
         {:noreply, state}
     end
   end
@@ -184,22 +196,26 @@ defmodule ExResilience.Bulkhead do
 
   defp try_acquire(table) do
     [{:max, max}] = :ets.lookup(table, :max)
+    [{:counter, counter}] = :ets.lookup(table, :counter)
+    cas_acquire(counter, max)
+  end
 
-    # Atomically increment, but only if we're below max.
-    # update_counter returns the new value after the operation.
-    # We use {2, 1} to increment by 1, then check if we exceeded max.
-    new_val = :ets.update_counter(table, :active, {2, 1})
+  # Compare-and-swap loop: atomically increment only if below max.
+  defp cas_acquire(counter, max) do
+    current = :atomics.get(counter, 1)
 
-    if new_val <= max do
-      :ok
+    if current < max do
+      case :atomics.compare_exchange(counter, 1, current, current + 1) do
+        :ok -> :ok
+        _val -> cas_acquire(counter, max)
+      end
     else
-      :ets.update_counter(table, :active, {2, -1})
       :full
     end
   end
 
-  defp release(name, table) do
-    GenServer.cast(name, {:release, table})
+  defp release(name, _table) do
+    GenServer.cast(name, :release)
   end
 
   defp execute_and_release(name, table, fun) do
