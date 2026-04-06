@@ -7,8 +7,8 @@ defmodule ExResilience.CircuitBreaker do
     * `:closed` -- calls pass through. Failures increment the counter.
     * `:open` -- calls are rejected immediately with `{:error, :circuit_open}`.
       After `reset_timeout` ms, transitions to `:half_open`.
-    * `:half_open` -- allows one trial call. Success resets to `:closed`,
-      failure reopens to `:open`.
+    * `:half_open` -- allows trial calls. After `success_threshold` consecutive
+      successes the breaker resets to `:closed`; any failure reopens to `:open`.
 
   ## Options
 
@@ -16,6 +16,8 @@ defmodule ExResilience.CircuitBreaker do
     * `:failure_threshold` -- consecutive failures before opening. Default `5`.
     * `:reset_timeout` -- ms to wait in `:open` before trying `:half_open`. Default `30_000`.
     * `:half_open_max_calls` -- concurrent calls allowed in `:half_open`. Default `1`.
+    * `:success_threshold` -- consecutive successes required in `:half_open` before
+      transitioning back to `:closed`. Default `1` (immediate close on first success).
     * `:error_classifier` -- controls which results count as failures.
       Accepts either a module implementing `ExResilience.ErrorClassifier`
       (classifications `:retriable` and `:failure` count as failures) or a
@@ -39,6 +41,7 @@ defmodule ExResilience.CircuitBreaker do
           | {:failure_threshold, pos_integer()}
           | {:reset_timeout, pos_integer()}
           | {:half_open_max_calls, pos_integer()}
+          | {:success_threshold, pos_integer()}
           | {:error_classifier, module() | (term() -> boolean())}
 
   @type state_name :: :closed | :open | :half_open
@@ -52,6 +55,7 @@ defmodule ExResilience.CircuitBreaker do
       :failure_threshold,
       :reset_timeout,
       :half_open_max_calls,
+      :success_threshold,
       :error_classifier
     ]
     defstruct [
@@ -59,10 +63,12 @@ defmodule ExResilience.CircuitBreaker do
       :failure_threshold,
       :reset_timeout,
       :half_open_max_calls,
+      :success_threshold,
       :error_classifier,
       :reset_timer,
       state: :closed,
       failure_count: 0,
+      success_count: 0,
       half_open_calls: 0
     ]
 
@@ -71,10 +77,12 @@ defmodule ExResilience.CircuitBreaker do
             failure_threshold: pos_integer(),
             reset_timeout: pos_integer(),
             half_open_max_calls: pos_integer(),
+            success_threshold: pos_integer(),
             error_classifier: module() | (term() -> boolean()),
             reset_timer: reference() | nil,
             state: :closed | :open | :half_open,
             failure_count: non_neg_integer(),
+            success_count: non_neg_integer(),
             half_open_calls: non_neg_integer()
           }
   end
@@ -156,6 +164,18 @@ defmodule ExResilience.CircuitBreaker do
   end
 
   @doc """
+  Returns detailed information about the circuit breaker state.
+  """
+  @spec get_info(atom()) :: %{
+          state: state_name(),
+          failure_count: non_neg_integer(),
+          success_count: non_neg_integer()
+        }
+  def get_info(name) do
+    GenServer.call(name, :get_info)
+  end
+
+  @doc """
   Manually resets the circuit breaker to `:closed`.
   """
   @spec reset(atom()) :: :ok
@@ -172,6 +192,7 @@ defmodule ExResilience.CircuitBreaker do
       failure_threshold: Keyword.get(opts, :failure_threshold, 5),
       reset_timeout: Keyword.get(opts, :reset_timeout, 30_000),
       half_open_max_calls: Keyword.get(opts, :half_open_max_calls, 1),
+      success_threshold: Keyword.get(opts, :success_threshold, 1),
       error_classifier: Keyword.get(opts, :error_classifier, &default_error_classifier/1)
     }
 
@@ -199,10 +220,27 @@ defmodule ExResilience.CircuitBreaker do
     {:reply, state.state, state}
   end
 
+  def handle_call(:get_info, _from, state) do
+    info = %{
+      state: state.state,
+      failure_count: state.failure_count,
+      success_count: state.success_count
+    }
+
+    {:reply, info, state}
+  end
+
   def handle_call(:reset, _from, state) do
     cancel_timer(state.reset_timer)
 
-    new_state = %{state | state: :closed, failure_count: 0, half_open_calls: 0, reset_timer: nil}
+    new_state = %{
+      state
+      | state: :closed,
+        failure_count: 0,
+        success_count: 0,
+        half_open_calls: 0,
+        reset_timer: nil
+    }
 
     Telemetry.emit(
       [:ex_resilience, :circuit_breaker, :state_change],
@@ -245,7 +283,8 @@ defmodule ExResilience.CircuitBreaker do
       %{name: state.name, from: :open, to: :half_open}
     )
 
-    {:noreply, %{state | state: :half_open, half_open_calls: 0, reset_timer: nil}}
+    {:noreply,
+     %{state | state: :half_open, half_open_calls: 0, success_count: 0, reset_timer: nil}}
   end
 
   def handle_info(:reset_timeout, state) do
@@ -273,13 +312,19 @@ defmodule ExResilience.CircuitBreaker do
   end
 
   defp handle_result(%State{state: :half_open} = state, false) do
-    Telemetry.emit(
-      [:ex_resilience, :circuit_breaker, :state_change],
-      %{system_time: System.system_time()},
-      %{name: state.name, from: :half_open, to: :closed}
-    )
+    new_count = state.success_count + 1
 
-    %{state | state: :closed, failure_count: 0, half_open_calls: 0}
+    if new_count >= state.success_threshold do
+      Telemetry.emit(
+        [:ex_resilience, :circuit_breaker, :state_change],
+        %{system_time: System.system_time()},
+        %{name: state.name, from: :half_open, to: :closed}
+      )
+
+      %{state | state: :closed, failure_count: 0, success_count: 0, half_open_calls: 0}
+    else
+      %{state | success_count: new_count}
+    end
   end
 
   defp handle_result(state, _is_failure), do: state
@@ -294,7 +339,14 @@ defmodule ExResilience.CircuitBreaker do
       %{name: state.name, from: state.state, to: :open}
     )
 
-    %{state | state: :open, failure_count: 0, half_open_calls: 0, reset_timer: timer}
+    %{
+      state
+      | state: :open,
+        failure_count: 0,
+        success_count: 0,
+        half_open_calls: 0,
+        reset_timer: timer
+    }
   end
 
   defp cancel_timer(nil), do: :ok

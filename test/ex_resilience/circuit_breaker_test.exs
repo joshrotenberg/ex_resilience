@@ -145,6 +145,91 @@ defmodule ExResilience.CircuitBreakerTest do
     end
   end
 
+  describe "success_threshold" do
+    test "requires multiple successes to close from half_open", %{name: name} do
+      {:ok, _} =
+        CircuitBreaker.start_link(
+          name: name,
+          failure_threshold: 1,
+          reset_timeout: 50,
+          success_threshold: 3,
+          half_open_max_calls: 3
+        )
+
+      # Trip the breaker
+      CircuitBreaker.call(name, fn -> {:error, :fail} end)
+      Process.sleep(70)
+      assert CircuitBreaker.get_state(name) == :half_open
+
+      # First success -- still half_open
+      CircuitBreaker.call(name, fn -> {:ok, :good} end)
+      Process.sleep(10)
+      assert CircuitBreaker.get_state(name) == :half_open
+
+      # Second success -- still half_open
+      CircuitBreaker.call(name, fn -> {:ok, :good} end)
+      Process.sleep(10)
+      assert CircuitBreaker.get_state(name) == :half_open
+
+      # Third success -- closes
+      CircuitBreaker.call(name, fn -> {:ok, :good} end)
+      Process.sleep(10)
+      assert CircuitBreaker.get_state(name) == :closed
+    end
+
+    test "resets success count on failure in half_open", %{name: name} do
+      {:ok, _} =
+        CircuitBreaker.start_link(
+          name: name,
+          failure_threshold: 1,
+          reset_timeout: 50,
+          success_threshold: 3,
+          half_open_max_calls: 3
+        )
+
+      # Trip the breaker
+      CircuitBreaker.call(name, fn -> {:error, :fail} end)
+      Process.sleep(70)
+      assert CircuitBreaker.get_state(name) == :half_open
+
+      # One success
+      CircuitBreaker.call(name, fn -> {:ok, :good} end)
+      Process.sleep(10)
+      assert CircuitBreaker.get_state(name) == :half_open
+
+      # Failure should reopen
+      CircuitBreaker.call(name, fn -> {:error, :fail} end)
+      Process.sleep(10)
+      assert CircuitBreaker.get_state(name) == :open
+
+      # Wait for half_open again and verify success_count was reset
+      Process.sleep(60)
+      assert CircuitBreaker.get_state(name) == :half_open
+
+      info = CircuitBreaker.get_info(name)
+      assert info.success_count == 0
+    end
+
+    test "get_info returns detailed state", %{name: name} do
+      {:ok, _} =
+        CircuitBreaker.start_link(
+          name: name,
+          failure_threshold: 2,
+          success_threshold: 2
+        )
+
+      info = CircuitBreaker.get_info(name)
+      assert info == %{state: :closed, failure_count: 0, success_count: 0}
+
+      # Add a failure and check
+      CircuitBreaker.call(name, fn -> {:error, :fail} end)
+      Process.sleep(10)
+
+      info = CircuitBreaker.get_info(name)
+      assert info == %{state: :closed, failure_count: 1, success_count: 0}
+    end
+  end
+
   describe "exceptions" do
     test "reraises and counts as failure", %{name: name} do
       {:ok, _} = CircuitBreaker.start_link(name: name, failure_threshold: 1)
