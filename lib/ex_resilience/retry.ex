@@ -15,6 +15,10 @@ defmodule ExResilience.Retry do
     * `:jitter` -- whether to add jitter. Default `true`.
     * `:retry_on` -- 1-arity predicate that returns `true` if the result
       should be retried. Default: retries `{:error, _}` and `:error`.
+      Takes precedence over `:error_classifier` when both are provided.
+    * `:error_classifier` -- module implementing `ExResilience.ErrorClassifier`.
+      When provided (and `:retry_on` is not), retries results classified as
+      `:retriable`. Ignored if `:retry_on` is also set.
 
   ## Examples
 
@@ -36,6 +40,7 @@ defmodule ExResilience.Retry do
           | {:max_delay, Backoff.milliseconds()}
           | {:jitter, boolean()}
           | {:retry_on, (term() -> boolean())}
+          | {:error_classifier, module()}
 
   defmodule Config do
     @moduledoc false
@@ -51,6 +56,8 @@ defmodule ExResilience.Retry do
   """
   @spec call((-> term()), [option()]) :: term()
   def call(fun, opts \\ []) do
+    retry_on = resolve_retry_on(opts)
+
     config = %Config{
       name: Keyword.get(opts, :name, :retry),
       max_attempts: Keyword.get(opts, :max_attempts, 3),
@@ -58,10 +65,24 @@ defmodule ExResilience.Retry do
       base_delay: Keyword.get(opts, :base_delay, 100),
       max_delay: Keyword.get(opts, :max_delay, 10_000),
       jitter: Keyword.get(opts, :jitter, true),
-      retry_on: Keyword.get(opts, :retry_on, &default_retry_on/1)
+      retry_on: retry_on
     }
 
     do_retry(fun, config, 1)
+  end
+
+  defp resolve_retry_on(opts) do
+    cond do
+      Keyword.has_key?(opts, :retry_on) ->
+        Keyword.fetch!(opts, :retry_on)
+
+      Keyword.has_key?(opts, :error_classifier) ->
+        classifier = Keyword.fetch!(opts, :error_classifier)
+        fn result -> classifier.classify(result) == :retriable end
+
+      true ->
+        &default_retry_on/1
+    end
   end
 
   defp do_retry(fun, config, attempt) do

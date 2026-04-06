@@ -13,6 +13,10 @@ defmodule ExResilience.Fallback do
       returns the fallback value.
     * `:only` -- optional 1-arity predicate; fallback only triggers when
       this returns `true`. Default: matches `{:error, _}` and `:error`.
+      Takes precedence over `:error_classifier` when both are provided.
+    * `:error_classifier` -- module implementing `ExResilience.ErrorClassifier`.
+      When provided (and `:only` is not), triggers fallback for results
+      classified as `:retriable` or `:failure`. Ignored if `:only` is also set.
 
   ## Examples
 
@@ -30,6 +34,7 @@ defmodule ExResilience.Fallback do
           {:name, atom()}
           | {:fallback, (term() -> term())}
           | {:only, (term() -> boolean())}
+          | {:error_classifier, module()}
 
   @doc """
   Executes `fun` and applies the fallback if the result matches the error predicate.
@@ -56,11 +61,9 @@ defmodule ExResilience.Fallback do
   def call(fun, opts) do
     fallback_fn = Keyword.fetch!(opts, :fallback)
     name = Keyword.get(opts, :name, :fallback)
-    only = Keyword.get(opts, :only, &default_error_check/1)
+    {only, has_custom_only} = resolve_only(opts)
 
     result = fun.()
-
-    has_custom_only = Keyword.has_key?(opts, :only)
 
     cond do
       only.(result) ->
@@ -92,6 +95,25 @@ defmodule ExResilience.Fallback do
         )
 
         result
+    end
+  end
+
+  defp resolve_only(opts) do
+    cond do
+      Keyword.has_key?(opts, :only) ->
+        {Keyword.fetch!(opts, :only), true}
+
+      Keyword.has_key?(opts, :error_classifier) ->
+        classifier = Keyword.fetch!(opts, :error_classifier)
+
+        predicate = fn result ->
+          classifier.classify(result) in [:retriable, :failure]
+        end
+
+        {predicate, true}
+
+      true ->
+        {&default_error_check/1, false}
     end
   end
 
