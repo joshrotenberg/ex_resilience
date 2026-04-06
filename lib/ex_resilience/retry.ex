@@ -12,7 +12,10 @@ defmodule ExResilience.Retry do
     * `:backoff` -- backoff strategy (`:fixed`, `:linear`, `:exponential`). Default `:exponential`.
     * `:base_delay` -- base delay in ms. Default `100`.
     * `:max_delay` -- cap on delay in ms. Default `10_000`.
-    * `:jitter` -- whether to add jitter. Default `true`.
+    * `:jitter` -- jitter setting. Can be `true` (full jitter, delay randomized
+      in `[0, delay]`), `false` (no jitter), or a float between 0.0 and 1.0
+      for proportional jitter (delay adjusted by +/- `delay * fraction`).
+      Default `true`.
     * `:retry_on` -- 1-arity predicate that returns `true` if the result
       should be retried. Default: retries `{:error, _}` and `:error`.
       Takes precedence over `:error_classifier` when both are provided.
@@ -38,7 +41,7 @@ defmodule ExResilience.Retry do
           | {:backoff, Backoff.strategy()}
           | {:base_delay, Backoff.milliseconds()}
           | {:max_delay, Backoff.milliseconds()}
-          | {:jitter, boolean()}
+          | {:jitter, boolean() | float()}
           | {:retry_on, (term() -> boolean())}
           | {:error_classifier, module()}
 
@@ -91,7 +94,7 @@ defmodule ExResilience.Retry do
         raw =
           Backoff.delay_capped(config.backoff, config.base_delay, attempt - 1, config.max_delay)
 
-        if config.jitter, do: jitter_delay(raw), else: raw
+        apply_jitter(raw, config.jitter)
       else
         0
       end
@@ -123,8 +126,22 @@ defmodule ExResilience.Retry do
     end
   end
 
+  defp apply_jitter(delay, false), do: delay
+  defp apply_jitter(delay, true), do: jitter_delay(delay)
+
+  defp apply_jitter(delay, fraction) when is_float(fraction),
+    do: proportional_jitter(delay, fraction)
+
   defp jitter_delay(0), do: 0
   defp jitter_delay(max), do: :rand.uniform(max + 1) - 1
+
+  defp proportional_jitter(0, _fraction), do: 0
+
+  defp proportional_jitter(delay, fraction) do
+    range = delay * fraction
+    offset = :rand.uniform() * range * 2 - range
+    max(round(delay + offset), 0)
+  end
 
   @doc false
   @spec default_retry_on(term()) :: boolean()
