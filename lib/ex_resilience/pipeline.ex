@@ -36,6 +36,140 @@ defmodule ExResilience.Pipeline do
     Telemetry
   }
 
+  @valid_layers [
+    :bulkhead,
+    :circuit_breaker,
+    :retry,
+    :rate_limiter,
+    :coalesce,
+    :hedge,
+    :chaos,
+    :fallback,
+    :cache
+  ]
+
+  @doc """
+  Generates a supervised pipeline module.
+
+  When a module does `use ExResilience.Pipeline`, it gets:
+
+    * `child_spec/1` -- returns a supervisor child spec
+    * `start_link/1` -- starts the pipeline supervisor
+    * `pipeline/0` -- returns the built `%Pipeline{}` struct
+    * `call/1` -- executes a function through the pipeline
+    * `call/2` -- executes a function through the pipeline (second arg reserved for future options)
+
+  ## Options
+
+    * `:name` -- pipeline name atom. Defaults to the module name converted to an atom.
+    * Layer keys -- any of #{inspect(@valid_layers)}. Each takes a keyword list of
+      options for that layer. Layers are added in the order specified.
+
+  ## Examples
+
+      defmodule MyApp.Resilience do
+        use ExResilience.Pipeline,
+          name: :my_service,
+          bulkhead: [max_concurrent: 10],
+          circuit_breaker: [failure_threshold: 5],
+          retry: [max_attempts: 3]
+      end
+
+      # In your supervision tree:
+      children = [MyApp.Resilience]
+      Supervisor.start_link(children, strategy: :one_for_one)
+
+      # Then call through the pipeline:
+      MyApp.Resilience.call(fn -> HTTPClient.get(url) end)
+
+  """
+  defmacro __using__(opts) do
+    valid_layers = @valid_layers
+
+    {name, layer_opts} = Keyword.pop(opts, :name)
+
+    # Validate layer keys at compile time
+    for {key, _} <- layer_opts do
+      unless key in valid_layers do
+        raise ArgumentError,
+              "unknown layer #{inspect(key)} in use ExResilience.Pipeline. " <>
+                "Valid layers: #{inspect(valid_layers)}"
+      end
+    end
+
+    # Build layers as a list of {atom, keyword} tuples
+    layers =
+      Enum.map(layer_opts, fn {layer, layer_config} ->
+        {layer, layer_config}
+      end)
+
+    quote do
+      @doc false
+      def child_spec(opts) do
+        %{
+          id: __MODULE__,
+          start: {__MODULE__, :start_link, [opts]},
+          type: :supervisor
+        }
+      end
+
+      @doc """
+      Starts the pipeline supervisor.
+
+      Accepts an optional keyword list of options. Passes through to
+      `ExResilience.Pipeline.Supervisor.start_link/1`.
+      """
+      @spec start_link(keyword()) :: Supervisor.on_start()
+      def start_link(opts \\ []) do
+        ExResilience.Pipeline.Supervisor.start_link({pipeline(), opts})
+      end
+
+      @doc """
+      Returns the pipeline struct for this module.
+      """
+      @spec pipeline() :: ExResilience.Pipeline.t()
+      def pipeline do
+        name =
+          case unquote(name) do
+            nil ->
+              __MODULE__
+              |> Module.split()
+              |> Enum.join("_")
+              |> Macro.underscore()
+              |> String.replace("/", "_")
+              |> String.to_atom()
+
+            n ->
+              n
+          end
+
+        layers = unquote(Macro.escape(layers))
+
+        Enum.reduce(layers, ExResilience.Pipeline.new(name), fn {layer, layer_opts}, acc ->
+          ExResilience.Pipeline.add(acc, layer, layer_opts)
+        end)
+      end
+
+      @doc """
+      Executes `fun` through the pipeline layers.
+      """
+      @spec call((-> term())) :: term()
+      def call(fun) do
+        ExResilience.Pipeline.call(pipeline(), fun)
+      end
+
+      @doc """
+      Executes `fun` through the pipeline layers.
+
+      The second argument is reserved for future options and is currently ignored.
+      """
+      @spec call((-> term()), keyword()) :: term()
+      def call(fun, _opts) do
+        ExResilience.Pipeline.call(pipeline(), fun)
+      end
+    end
+  end
+
   @type layer :: {atom(), keyword()}
 
   @type t :: %__MODULE__{

@@ -76,4 +76,25 @@ defmodule ExResilience do
   """
   @spec call(Pipeline.t(), (-> term())) :: term()
   defdelegate call(pipeline, fun), to: Pipeline
+
+  @doc """
+  Starts a pipeline supervisor for the given pipeline.
+
+  This is the preferred way to run a pipeline in a supervision tree.
+  For standalone or test usage, see `start/1`.
+
+  ## Examples
+
+      pipeline =
+        ExResilience.new(:my_service)
+        |> ExResilience.add(:bulkhead, max_concurrent: 10)
+        |> ExResilience.add(:circuit_breaker, failure_threshold: 5)
+
+      {:ok, sup} = ExResilience.start_link(pipeline)
+
+  """
+  @spec start_link(Pipeline.t(), keyword()) :: Supervisor.on_start()
+  def start_link(pipeline, opts \\ []) do
+    Pipeline.Supervisor.start_link({pipeline, opts})
+  end
 end
