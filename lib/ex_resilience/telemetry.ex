@@ -134,6 +134,24 @@ defmodule ExResilience.Telemetry do
       Measurements: `%{system_time: integer}`.
       Metadata: `%{name: atom, key: term}`.
 
+  ## Adaptive Concurrency Events
+
+    * `[:ex_resilience, :adaptive_concurrency, :call, :start]` - emitted when a call enters the limiter.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :adaptive_concurrency, :call, :stop]` - emitted when a call completes.
+      Measurements: `%{duration: native_time}`.
+      Metadata: `%{name: atom, result: :ok | :error}`.
+
+    * `[:ex_resilience, :adaptive_concurrency, :rejected]` - emitted when a call is rejected.
+      Measurements: `%{system_time: integer}`.
+      Metadata: `%{name: atom}`.
+
+    * `[:ex_resilience, :adaptive_concurrency, :limit_changed]` - emitted when the limit is adjusted.
+      Measurements: `%{old_limit: integer, new_limit: integer}`.
+      Metadata: `%{name: atom, algorithm: atom}`.
+
   ## Pipeline Events
 
     * `[:ex_resilience, :pipeline, :call, :start]` - emitted when a pipeline call starts.
@@ -192,6 +210,11 @@ defmodule ExResilience.Telemetry do
       [:ex_resilience, :cache, :miss],
       [:ex_resilience, :cache, :put],
       [:ex_resilience, :cache, :invalidate],
+      # Adaptive Concurrency
+      [:ex_resilience, :adaptive_concurrency, :call, :start],
+      [:ex_resilience, :adaptive_concurrency, :call, :stop],
+      [:ex_resilience, :adaptive_concurrency, :rejected],
+      [:ex_resilience, :adaptive_concurrency, :limit_changed],
       # Pipeline
       [:ex_resilience, :pipeline, :call, :start],
       [:ex_resilience, :pipeline, :call, :stop]
